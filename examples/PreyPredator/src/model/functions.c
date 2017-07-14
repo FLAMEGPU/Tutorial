@@ -271,7 +271,21 @@ __FLAME_GPU_FUNC__ int prey_eat_or_starve(xmachine_memory_prey* xmemory, xmachin
 {
 	int dead = 0;
 
-        // Excercise 3.3
+	//Iterate the grass eaten messages until NULL is returned which indicates all messages have been read.
+	xmachine_message_grass_eaten* grass_eaten_message = get_first_grass_eaten_message(grass_eaten_messages);
+	while (grass_eaten_message)
+	{
+		//if the grass eaten message indicates that this prey ate some grass then increase the preys life by adding energy
+		if ((xmemory->id == grass_eaten_message->prey_id)) {
+			xmemory->life += GAIN_FROM_FOOD_PREY;
+		}
+
+		grass_eaten_message = get_next_grass_eaten_message(grass_eaten_message, grass_eaten_messages);
+	}
+
+	//if the life has reduced to 0 then the prey should die or starvation
+	if (xmemory->life < 1)
+		dead = 1;
 
 	//return dead value to remove dead agents from the simulation
 	return dead;
@@ -483,8 +497,7 @@ __FLAME_GPU_FUNC__ int pred_reproduction(xmachine_memory_predator* agent_predato
 
 __FLAME_GPU_FUNC__ int grass_output_location(xmachine_memory_grass* xmemory, xmachine_message_grass_location_list* grass_location_messages)
 {
-	// Excercise 3.1 : add location message
-	
+	add_grass_location_message(grass_location_messages, xmemory->id, xmemory->x, xmemory->y);
 	return 0;
 }
 
@@ -493,7 +506,37 @@ __FLAME_GPU_FUNC__ int grass_output_location(xmachine_memory_grass* xmemory, xma
 
 __FLAME_GPU_FUNC__ int grass_eaten(xmachine_memory_grass* xmemory, xmachine_message_prey_location_list* prey_location_messages, xmachine_message_grass_eaten_list* grass_eaten_messages)
 {
-	// Excercise 3.2 
+	float2 grass_position = float2(xmemory->x, xmemory->y);
+
+	int prey_id = -1;
+	float closest_prey = GRASS_EAT_DISTANCE;
+	int eaten = 0;
+
+	//Iterate the prey location messages until NULL is returned which indicates all messages have been read.
+	xmachine_message_prey_location* prey_location_message = get_first_prey_location_message(prey_location_messages);
+	while (prey_location_message)
+	{
+		float2 prey_pos = float2(prey_location_message->x, prey_location_message->y);
+		float distance = length(grass_position - prey_pos);
+
+		//If the prey is closest within eating distance so far and the grass is available then flag it is eaten and store closest prey
+		if ((distance < closest_prey) && (xmemory->available == 1))
+		{
+			prey_id = prey_location_message->id;
+			closest_prey = distance;
+			eaten = 1;
+		}
+
+		prey_location_message = get_next_prey_location_message(prey_location_message, prey_location_messages);
+	}
+
+	//If the grass has been eaten then notify the prey with a message
+	if (eaten){
+		add_grass_eaten_message(grass_eaten_messages, prey_id);
+		xmemory->dead_cycles = 0;
+		xmemory->available = 0;
+		xmemory->type = 3.0f;  // change the color to navy
+	}
 
 	return 0;
 }
@@ -501,7 +544,18 @@ __FLAME_GPU_FUNC__ int grass_eaten(xmachine_memory_grass* xmemory, xmachine_mess
 // generate grass
 __FLAME_GPU_FUNC__ int grass_growth(xmachine_memory_grass* agent_grass, RNG_rand48* rand48)
 {
-        // Excercise 3.4
+	//after a number of dead cycles the grass will re-generate
+	if (agent_grass->dead_cycles == GRASS_REGROW_CYCLES){
+		int cycle_start = 0;
+		agent_grass->dead_cycles = cycle_start;
+		agent_grass->available = 1;
+		agent_grass->type = 2.0f;  // change the color to green
+		
+	}
+
+	//increase the dead cycles for grass which is dead
+	if (agent_grass->available == 0)
+		agent_grass->dead_cycles++;
 	
 	return 0;
 }
