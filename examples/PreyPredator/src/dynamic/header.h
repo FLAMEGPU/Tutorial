@@ -1,23 +1,31 @@
 
-	/*
-	* FLAME GPU v 1.4.0 for CUDA 7.5
-	* Copyright 2015 University of Sheffield.
-	* Author: Dr Paul Richmond
-	* Contact: p.richmond@sheffield.ac.uk (http://www.paulrichmond.staff.shef.ac.uk)
-	*
-	* University of Sheffield retain all intellectual property and
-	* proprietary rights in and to this software and related documentation.
-	* Any use, reproduction, disclosure, or distribution of this software
-	* and related documentation without an express license agreement from
-	* University of Sheffield is strictly prohibited.
-	*
-	* For terms of licence agreement please attached licence or view licence
-	* on www.flamegpu.com website.
-	*
-	*/
+/*
+ * FLAME GPU v 1.5.X for CUDA 9
+ * Copyright University of Sheffield.
+ * Original Author: Dr Paul Richmond (user contributions tracked on https://github.com/FLAMEGPU/FLAMEGPU)
+ * Contact: p.richmond@sheffield.ac.uk (http://www.paulrichmond.staff.shef.ac.uk)
+ *
+ * University of Sheffield retain all intellectual property and
+ * proprietary rights in and to this software and related documentation.
+ * Any use, reproduction, disclosure, or distribution of this software
+ * and related documentation without an express license agreement from
+ * University of Sheffield is strictly prohibited.
+ *
+ * For terms of licence agreement please attached licence or view licence
+ * on www.flamegpu.com website.
+ *
+ */
+
+
 
 #ifndef __HEADER
 #define __HEADER
+
+#if defined __NVCC__
+   // Disable annotation on defaulted function warnings (glm 0.9.9 and CUDA 9.0 introduced this warning)
+   #pragma diag_suppress esa_on_defaulted_function_ignored 
+#endif
+
 #define GLM_FORCE_NO_CTOR_INIT
 #include <glm/glm.hpp>
 
@@ -30,12 +38,31 @@
 #define __FLAME_GPU_INIT_FUNC__
 #define __FLAME_GPU_STEP_FUNC__
 #define __FLAME_GPU_EXIT_FUNC__
+#define __FLAME_GPU_HOST_FUNC__ __host__
 
 #define USE_CUDA_STREAMS
 #define FAST_ATOMIC_SORTING
 
+// FLAME GPU Version Macros.
+#define FLAME_GPU_MAJOR_VERSION 1
+#define FLAME_GPU_MINOR_VERSION 5
+#define FLAME_GPU_PATCH_VERSION 0
+
 typedef unsigned int uint;
 
+//FLAME GPU vector types float, (i)nteger, (u)nsigned integer, (d)ouble
+typedef glm::vec2 fvec2;
+typedef glm::vec3 fvec3;
+typedef glm::vec4 fvec4;
+typedef glm::ivec2 ivec2;
+typedef glm::ivec3 ivec3;
+typedef glm::ivec4 ivec4;
+typedef glm::uvec2 uvec2;
+typedef glm::uvec3 uvec3;
+typedef glm::uvec4 uvec4;
+typedef glm::dvec2 dvec2;
+typedef glm::dvec3 dvec3;
+typedef glm::dvec4 dvec4;
 
 	
 
@@ -51,6 +78,8 @@ typedef unsigned int uint;
 
 //Maximum population size of xmachine_memory_grass
 #define xmachine_memory_grass_MAX 262144
+
+
   
   
 /* Message population size definitions */
@@ -70,10 +99,31 @@ typedef unsigned int uint;
 #define xmachine_message_grass_eaten_MAX 262144
 
 
+/* Define preprocessor symbols for each message to specify the type, to simplify / improve portability */
+
+#define xmachine_message_grass_location_partitioningNone
+#define xmachine_message_prey_location_partitioningNone
+#define xmachine_message_pred_location_partitioningNone
+#define xmachine_message_prey_eaten_partitioningNone
+#define xmachine_message_grass_eaten_partitioningNone
 
 /* Spatial partitioning grid size definitions */
+
+/* Static Graph size definitions*/
   
-  
+
+/* Default visualisation Colour indices */
+ 
+#define FLAME_GPU_VISUALISATION_COLOUR_BLACK 0
+#define FLAME_GPU_VISUALISATION_COLOUR_RED 1
+#define FLAME_GPU_VISUALISATION_COLOUR_GREEN 2
+#define FLAME_GPU_VISUALISATION_COLOUR_BLUE 3
+#define FLAME_GPU_VISUALISATION_COLOUR_YELLOW 4
+#define FLAME_GPU_VISUALISATION_COLOUR_CYAN 5
+#define FLAME_GPU_VISUALISATION_COLOUR_MAGENTA 6
+#define FLAME_GPU_VISUALISATION_COLOUR_WHITE 7
+#define FLAME_GPU_VISUALISATION_COLOUR_BROWN 8
+
 /* enum types */
 
 /**
@@ -361,6 +411,15 @@ struct xmachine_message_grass_eaten_list
 
 /* Spatially Partitioned Message boundary Matrices */
 
+
+
+/* Graph structures */
+
+
+/* Graph Edge Partitioned message boundary structures */
+
+
+/* Graph utility functions, usable in agent functions and implemented in FLAMEGPU_Kernels */
 
 
   /* Random */
@@ -651,8 +710,7 @@ __FLAME_GPU_FUNC__ xmachine_message_grass_eaten * get_first_grass_eaten_message(
  * @return        returns the first message from the message list (offset depending on agent block)
  */
 __FLAME_GPU_FUNC__ xmachine_message_grass_eaten * get_next_grass_eaten_message(xmachine_message_grass_eaten* current, xmachine_message_grass_eaten_list* grass_eaten_messages);
-  
-  
+
   
 /* Agent Function Prototypes implemented in FLAMEGPU_Kernels */
 
@@ -699,12 +757,19 @@ __FLAME_GPU_FUNC__ void add_predator_agent(xmachine_memory_predator_list* agents
 __FLAME_GPU_FUNC__ void add_grass_agent(xmachine_memory_grass_list* agents, int id, float x, float y, float type, int dead_cycles, int available);
 
 
+/* Graph loading function prototypes implemented in io.cu */
+
+
   
 /* Simulation function prototypes implemented in simulation.cu */
+/** getIterationNumber
+ *  Get the iteration number (host)
+ */
+extern unsigned int getIterationNumber();
 
 /** initialise
  * Initialise the simulation. Allocated host and device memory. Reads the initial agent configuration from XML.
- * @param input	XML file path for agent initial configuration
+ * @param input        XML file path for agent initial configuration
  */
 extern void initialise(char * input);
 
@@ -870,6 +935,353 @@ extern xmachine_memory_grass_list* get_host_grass_default3_agents();
 void sort_grasss_default3(void (*generate_key_value_pairs)(unsigned int* keys, unsigned int* values, xmachine_memory_grass_list* agents));
 
 
+
+/* Host based access of agent variables*/
+
+/** int get_prey_default1_variable_id(unsigned int index)
+ * Gets the value of the id variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable id
+ */
+__host__ int get_prey_default1_variable_id(unsigned int index);
+
+/** float get_prey_default1_variable_x(unsigned int index)
+ * Gets the value of the x variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable x
+ */
+__host__ float get_prey_default1_variable_x(unsigned int index);
+
+/** float get_prey_default1_variable_y(unsigned int index)
+ * Gets the value of the y variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable y
+ */
+__host__ float get_prey_default1_variable_y(unsigned int index);
+
+/** float get_prey_default1_variable_type(unsigned int index)
+ * Gets the value of the type variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable type
+ */
+__host__ float get_prey_default1_variable_type(unsigned int index);
+
+/** float get_prey_default1_variable_fx(unsigned int index)
+ * Gets the value of the fx variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable fx
+ */
+__host__ float get_prey_default1_variable_fx(unsigned int index);
+
+/** float get_prey_default1_variable_fy(unsigned int index)
+ * Gets the value of the fy variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable fy
+ */
+__host__ float get_prey_default1_variable_fy(unsigned int index);
+
+/** float get_prey_default1_variable_steer_x(unsigned int index)
+ * Gets the value of the steer_x variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable steer_x
+ */
+__host__ float get_prey_default1_variable_steer_x(unsigned int index);
+
+/** float get_prey_default1_variable_steer_y(unsigned int index)
+ * Gets the value of the steer_y variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable steer_y
+ */
+__host__ float get_prey_default1_variable_steer_y(unsigned int index);
+
+/** int get_prey_default1_variable_life(unsigned int index)
+ * Gets the value of the life variable of an prey agent in the default1 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable life
+ */
+__host__ int get_prey_default1_variable_life(unsigned int index);
+
+/** int get_predator_default2_variable_id(unsigned int index)
+ * Gets the value of the id variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable id
+ */
+__host__ int get_predator_default2_variable_id(unsigned int index);
+
+/** float get_predator_default2_variable_x(unsigned int index)
+ * Gets the value of the x variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable x
+ */
+__host__ float get_predator_default2_variable_x(unsigned int index);
+
+/** float get_predator_default2_variable_y(unsigned int index)
+ * Gets the value of the y variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable y
+ */
+__host__ float get_predator_default2_variable_y(unsigned int index);
+
+/** float get_predator_default2_variable_type(unsigned int index)
+ * Gets the value of the type variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable type
+ */
+__host__ float get_predator_default2_variable_type(unsigned int index);
+
+/** float get_predator_default2_variable_fx(unsigned int index)
+ * Gets the value of the fx variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable fx
+ */
+__host__ float get_predator_default2_variable_fx(unsigned int index);
+
+/** float get_predator_default2_variable_fy(unsigned int index)
+ * Gets the value of the fy variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable fy
+ */
+__host__ float get_predator_default2_variable_fy(unsigned int index);
+
+/** float get_predator_default2_variable_steer_x(unsigned int index)
+ * Gets the value of the steer_x variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable steer_x
+ */
+__host__ float get_predator_default2_variable_steer_x(unsigned int index);
+
+/** float get_predator_default2_variable_steer_y(unsigned int index)
+ * Gets the value of the steer_y variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable steer_y
+ */
+__host__ float get_predator_default2_variable_steer_y(unsigned int index);
+
+/** int get_predator_default2_variable_life(unsigned int index)
+ * Gets the value of the life variable of an predator agent in the default2 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable life
+ */
+__host__ int get_predator_default2_variable_life(unsigned int index);
+
+/** int get_grass_default3_variable_id(unsigned int index)
+ * Gets the value of the id variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable id
+ */
+__host__ int get_grass_default3_variable_id(unsigned int index);
+
+/** float get_grass_default3_variable_x(unsigned int index)
+ * Gets the value of the x variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable x
+ */
+__host__ float get_grass_default3_variable_x(unsigned int index);
+
+/** float get_grass_default3_variable_y(unsigned int index)
+ * Gets the value of the y variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable y
+ */
+__host__ float get_grass_default3_variable_y(unsigned int index);
+
+/** float get_grass_default3_variable_type(unsigned int index)
+ * Gets the value of the type variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable type
+ */
+__host__ float get_grass_default3_variable_type(unsigned int index);
+
+/** int get_grass_default3_variable_dead_cycles(unsigned int index)
+ * Gets the value of the dead_cycles variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable dead_cycles
+ */
+__host__ int get_grass_default3_variable_dead_cycles(unsigned int index);
+
+/** int get_grass_default3_variable_available(unsigned int index)
+ * Gets the value of the available variable of an grass agent in the default3 state on the host. 
+ * If the data is not currently on the host, a memcpy of the data of all agents in that state list will be issued, via a global.
+ * This has a potentially significant performance impact if used improperly.
+ * @param index the index of the agent within the list.
+ * @return value of agent variable available
+ */
+__host__ int get_grass_default3_variable_available(unsigned int index);
+
+
+
+
+/* Host based agent creation functions */
+
+/** h_allocate_agent_prey
+ * Utility function to allocate and initialise an agent struct on the host.
+ * @return address of a host-allocated prey struct.
+ */
+xmachine_memory_prey* h_allocate_agent_prey();
+/** h_free_agent_prey
+ * Utility function to free a host-allocated agent struct.
+ * This also deallocates any agent variable arrays, and sets the pointer to null
+ * @param agent address of pointer to the host allocated struct
+ */
+void h_free_agent_prey(xmachine_memory_prey** agent);
+/** h_allocate_agent_prey_array
+ * Utility function to allocate an array of structs for  prey agents.
+ * @param count the number of structs to allocate memory for.
+ * @return pointer to the allocated array of structs
+ */
+xmachine_memory_prey** h_allocate_agent_prey_array(unsigned int count);
+/** h_free_agent_prey_array(
+ * Utility function to deallocate a host array of agent structs, including agent variables, and set pointer values to NULL.
+ * @param agents the address of the pointer to the host array of structs.
+ * @param count the number of elements in the AoS, to deallocate individual elements.
+ */
+void h_free_agent_prey_array(xmachine_memory_prey*** agents, unsigned int count);
+
+
+/** h_add_agent_prey_default1
+ * Host function to add a single agent of type prey to the default1 state on the device.
+ * This invokes many cudaMempcy, and an append kernel launch. 
+ * If multiple agents are to be created in a single iteration, consider h_add_agent_prey_default1 instead.
+ * @param agent pointer to agent struct on the host. Agent member arrays are supported.
+ */
+void h_add_agent_prey_default1(xmachine_memory_prey* agent);
+
+/** h_add_agents_prey_default1(
+ * Host function to add multiple agents of type prey to the default1 state on the device if possible.
+ * This includes the transparent conversion from AoS to SoA, many calls to cudaMemcpy and an append kernel.
+ * @param agents pointer to host struct of arrays of prey agents
+ * @param count the number of agents to copy from the host to the device.
+ */
+void h_add_agents_prey_default1(xmachine_memory_prey** agents, unsigned int count);
+
+/** h_allocate_agent_predator
+ * Utility function to allocate and initialise an agent struct on the host.
+ * @return address of a host-allocated predator struct.
+ */
+xmachine_memory_predator* h_allocate_agent_predator();
+/** h_free_agent_predator
+ * Utility function to free a host-allocated agent struct.
+ * This also deallocates any agent variable arrays, and sets the pointer to null
+ * @param agent address of pointer to the host allocated struct
+ */
+void h_free_agent_predator(xmachine_memory_predator** agent);
+/** h_allocate_agent_predator_array
+ * Utility function to allocate an array of structs for  predator agents.
+ * @param count the number of structs to allocate memory for.
+ * @return pointer to the allocated array of structs
+ */
+xmachine_memory_predator** h_allocate_agent_predator_array(unsigned int count);
+/** h_free_agent_predator_array(
+ * Utility function to deallocate a host array of agent structs, including agent variables, and set pointer values to NULL.
+ * @param agents the address of the pointer to the host array of structs.
+ * @param count the number of elements in the AoS, to deallocate individual elements.
+ */
+void h_free_agent_predator_array(xmachine_memory_predator*** agents, unsigned int count);
+
+
+/** h_add_agent_predator_default2
+ * Host function to add a single agent of type predator to the default2 state on the device.
+ * This invokes many cudaMempcy, and an append kernel launch. 
+ * If multiple agents are to be created in a single iteration, consider h_add_agent_predator_default2 instead.
+ * @param agent pointer to agent struct on the host. Agent member arrays are supported.
+ */
+void h_add_agent_predator_default2(xmachine_memory_predator* agent);
+
+/** h_add_agents_predator_default2(
+ * Host function to add multiple agents of type predator to the default2 state on the device if possible.
+ * This includes the transparent conversion from AoS to SoA, many calls to cudaMemcpy and an append kernel.
+ * @param agents pointer to host struct of arrays of predator agents
+ * @param count the number of agents to copy from the host to the device.
+ */
+void h_add_agents_predator_default2(xmachine_memory_predator** agents, unsigned int count);
+
+/** h_allocate_agent_grass
+ * Utility function to allocate and initialise an agent struct on the host.
+ * @return address of a host-allocated grass struct.
+ */
+xmachine_memory_grass* h_allocate_agent_grass();
+/** h_free_agent_grass
+ * Utility function to free a host-allocated agent struct.
+ * This also deallocates any agent variable arrays, and sets the pointer to null
+ * @param agent address of pointer to the host allocated struct
+ */
+void h_free_agent_grass(xmachine_memory_grass** agent);
+/** h_allocate_agent_grass_array
+ * Utility function to allocate an array of structs for  grass agents.
+ * @param count the number of structs to allocate memory for.
+ * @return pointer to the allocated array of structs
+ */
+xmachine_memory_grass** h_allocate_agent_grass_array(unsigned int count);
+/** h_free_agent_grass_array(
+ * Utility function to deallocate a host array of agent structs, including agent variables, and set pointer values to NULL.
+ * @param agents the address of the pointer to the host array of structs.
+ * @param count the number of elements in the AoS, to deallocate individual elements.
+ */
+void h_free_agent_grass_array(xmachine_memory_grass*** agents, unsigned int count);
+
+
+/** h_add_agent_grass_default3
+ * Host function to add a single agent of type grass to the default3 state on the device.
+ * This invokes many cudaMempcy, and an append kernel launch. 
+ * If multiple agents are to be created in a single iteration, consider h_add_agent_grass_default3 instead.
+ * @param agent pointer to agent struct on the host. Agent member arrays are supported.
+ */
+void h_add_agent_grass_default3(xmachine_memory_grass* agent);
+
+/** h_add_agents_grass_default3(
+ * Host function to add multiple agents of type grass to the default3 state on the device if possible.
+ * This includes the transparent conversion from AoS to SoA, many calls to cudaMemcpy and an append kernel.
+ * @param agents pointer to host struct of arrays of grass agents
+ * @param count the number of agents to copy from the host to the device.
+ */
+void h_add_agents_grass_default3(xmachine_memory_grass** agents, unsigned int count);
+
   
   
 /* Analytics functions for each varible in each state*/
@@ -886,12 +1298,25 @@ typedef enum {
  */
 int reduce_prey_default1_id_variable();
 
+
+
 /** int count_prey_default1_id_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_prey_default1_id_variable(int count_value);
+
+/** int min_prey_default1_id_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_prey_default1_id_variable();
+/** int max_prey_default1_id_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_prey_default1_id_variable();
 
 /** float reduce_prey_default1_x_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -899,11 +1324,37 @@ int count_prey_default1_id_variable(int count_value);
  */
 float reduce_prey_default1_x_variable();
 
+
+
+/** float min_prey_default1_x_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_x_variable();
+/** float max_prey_default1_x_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_x_variable();
+
 /** float reduce_prey_default1_y_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_prey_default1_y_variable();
+
+
+
+/** float min_prey_default1_y_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_y_variable();
+/** float max_prey_default1_y_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_y_variable();
 
 /** float reduce_prey_default1_type_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -911,11 +1362,37 @@ float reduce_prey_default1_y_variable();
  */
 float reduce_prey_default1_type_variable();
 
+
+
+/** float min_prey_default1_type_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_type_variable();
+/** float max_prey_default1_type_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_type_variable();
+
 /** float reduce_prey_default1_fx_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_prey_default1_fx_variable();
+
+
+
+/** float min_prey_default1_fx_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_fx_variable();
+/** float max_prey_default1_fx_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_fx_variable();
 
 /** float reduce_prey_default1_fy_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -923,11 +1400,37 @@ float reduce_prey_default1_fx_variable();
  */
 float reduce_prey_default1_fy_variable();
 
+
+
+/** float min_prey_default1_fy_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_fy_variable();
+/** float max_prey_default1_fy_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_fy_variable();
+
 /** float reduce_prey_default1_steer_x_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_prey_default1_steer_x_variable();
+
+
+
+/** float min_prey_default1_steer_x_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_steer_x_variable();
+/** float max_prey_default1_steer_x_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_steer_x_variable();
 
 /** float reduce_prey_default1_steer_y_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -935,18 +1438,44 @@ float reduce_prey_default1_steer_x_variable();
  */
 float reduce_prey_default1_steer_y_variable();
 
+
+
+/** float min_prey_default1_steer_y_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_prey_default1_steer_y_variable();
+/** float max_prey_default1_steer_y_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_prey_default1_steer_y_variable();
+
 /** int reduce_prey_default1_life_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 int reduce_prey_default1_life_variable();
 
+
+
 /** int count_prey_default1_life_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_prey_default1_life_variable(int count_value);
+
+/** int min_prey_default1_life_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_prey_default1_life_variable();
+/** int max_prey_default1_life_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_prey_default1_life_variable();
 
 /** int reduce_predator_default2_id_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -954,12 +1483,25 @@ int count_prey_default1_life_variable(int count_value);
  */
 int reduce_predator_default2_id_variable();
 
+
+
 /** int count_predator_default2_id_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_predator_default2_id_variable(int count_value);
+
+/** int min_predator_default2_id_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_predator_default2_id_variable();
+/** int max_predator_default2_id_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_predator_default2_id_variable();
 
 /** float reduce_predator_default2_x_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -967,11 +1509,37 @@ int count_predator_default2_id_variable(int count_value);
  */
 float reduce_predator_default2_x_variable();
 
+
+
+/** float min_predator_default2_x_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_x_variable();
+/** float max_predator_default2_x_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_x_variable();
+
 /** float reduce_predator_default2_y_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_predator_default2_y_variable();
+
+
+
+/** float min_predator_default2_y_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_y_variable();
+/** float max_predator_default2_y_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_y_variable();
 
 /** float reduce_predator_default2_type_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -979,11 +1547,37 @@ float reduce_predator_default2_y_variable();
  */
 float reduce_predator_default2_type_variable();
 
+
+
+/** float min_predator_default2_type_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_type_variable();
+/** float max_predator_default2_type_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_type_variable();
+
 /** float reduce_predator_default2_fx_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_predator_default2_fx_variable();
+
+
+
+/** float min_predator_default2_fx_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_fx_variable();
+/** float max_predator_default2_fx_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_fx_variable();
 
 /** float reduce_predator_default2_fy_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -991,11 +1585,37 @@ float reduce_predator_default2_fx_variable();
  */
 float reduce_predator_default2_fy_variable();
 
+
+
+/** float min_predator_default2_fy_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_fy_variable();
+/** float max_predator_default2_fy_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_fy_variable();
+
 /** float reduce_predator_default2_steer_x_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_predator_default2_steer_x_variable();
+
+
+
+/** float min_predator_default2_steer_x_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_steer_x_variable();
+/** float max_predator_default2_steer_x_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_steer_x_variable();
 
 /** float reduce_predator_default2_steer_y_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -1003,18 +1623,44 @@ float reduce_predator_default2_steer_x_variable();
  */
 float reduce_predator_default2_steer_y_variable();
 
+
+
+/** float min_predator_default2_steer_y_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_predator_default2_steer_y_variable();
+/** float max_predator_default2_steer_y_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_predator_default2_steer_y_variable();
+
 /** int reduce_predator_default2_life_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 int reduce_predator_default2_life_variable();
 
+
+
 /** int count_predator_default2_life_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_predator_default2_life_variable(int count_value);
+
+/** int min_predator_default2_life_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_predator_default2_life_variable();
+/** int max_predator_default2_life_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_predator_default2_life_variable();
 
 /** int reduce_grass_default3_id_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -1022,12 +1668,25 @@ int count_predator_default2_life_variable(int count_value);
  */
 int reduce_grass_default3_id_variable();
 
+
+
 /** int count_grass_default3_id_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_grass_default3_id_variable(int count_value);
+
+/** int min_grass_default3_id_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_grass_default3_id_variable();
+/** int max_grass_default3_id_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_grass_default3_id_variable();
 
 /** float reduce_grass_default3_x_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -1035,11 +1694,37 @@ int count_grass_default3_id_variable(int count_value);
  */
 float reduce_grass_default3_x_variable();
 
+
+
+/** float min_grass_default3_x_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_grass_default3_x_variable();
+/** float max_grass_default3_x_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_grass_default3_x_variable();
+
 /** float reduce_grass_default3_y_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 float reduce_grass_default3_y_variable();
+
+
+
+/** float min_grass_default3_y_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_grass_default3_y_variable();
+/** float max_grass_default3_y_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_grass_default3_y_variable();
 
 /** float reduce_grass_default3_type_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -1047,18 +1732,44 @@ float reduce_grass_default3_y_variable();
  */
 float reduce_grass_default3_type_variable();
 
+
+
+/** float min_grass_default3_type_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float min_grass_default3_type_variable();
+/** float max_grass_default3_type_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+float max_grass_default3_type_variable();
+
 /** int reduce_grass_default3_dead_cycles_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
  * @return the reduced variable value of the specified agent name and state
  */
 int reduce_grass_default3_dead_cycles_variable();
 
+
+
 /** int count_grass_default3_dead_cycles_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_grass_default3_dead_cycles_variable(int count_value);
+
+/** int min_grass_default3_dead_cycles_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_grass_default3_dead_cycles_variable();
+/** int max_grass_default3_dead_cycles_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_grass_default3_dead_cycles_variable();
 
 /** int reduce_grass_default3_available_variable();
  * Reduction functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
@@ -1066,12 +1777,25 @@ int count_grass_default3_dead_cycles_variable(int count_value);
  */
 int reduce_grass_default3_available_variable();
 
+
+
 /** int count_grass_default3_available_variable(int count_value){
  * Count can be used for integer only agent variables and allows unique values to be counted using a reduction. Useful for generating histograms.
  * @param count_value The unique value which should be counted
- * @return The number of unique values of the count_value found in the agent state varaible list
+ * @return The number of unique values of the count_value found in the agent state variable list
  */
 int count_grass_default3_available_variable(int count_value);
+
+/** int min_grass_default3_available_variable();
+ * Min functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int min_grass_default3_available_variable();
+/** int max_grass_default3_available_variable();
+ * Max functions can be used by visualisations, step and exit functions to gather data for plotting or updating global variables
+ * @return the minimum variable value of the specified agent name and state
+ */
+int max_grass_default3_available_variable();
 
 
   
@@ -1093,7 +1817,6 @@ __constant__ int GRASS_REGROW_CYCLES;
  */
 extern void set_REPRODUCE_PREY_PROB(float* h_REPRODUCE_PREY_PROB);
 
-
 extern const float* get_REPRODUCE_PREY_PROB();
 
 
@@ -1104,7 +1827,6 @@ extern float h_env_REPRODUCE_PREY_PROB;
  * @param h_REPRODUCE_PREDATOR_PROB value to set the variable
  */
 extern void set_REPRODUCE_PREDATOR_PROB(float* h_REPRODUCE_PREDATOR_PROB);
-
 
 extern const float* get_REPRODUCE_PREDATOR_PROB();
 
@@ -1117,7 +1839,6 @@ extern float h_env_REPRODUCE_PREDATOR_PROB;
  */
 extern void set_GAIN_FROM_FOOD_PREDATOR(int* h_GAIN_FROM_FOOD_PREDATOR);
 
-
 extern const int* get_GAIN_FROM_FOOD_PREDATOR();
 
 
@@ -1129,7 +1850,6 @@ extern int h_env_GAIN_FROM_FOOD_PREDATOR;
  */
 extern void set_GAIN_FROM_FOOD_PREY(int* h_GAIN_FROM_FOOD_PREY);
 
-
 extern const int* get_GAIN_FROM_FOOD_PREY();
 
 
@@ -1140,7 +1860,6 @@ extern int h_env_GAIN_FROM_FOOD_PREY;
  * @param h_GRASS_REGROW_CYCLES value to set the variable
  */
 extern void set_GRASS_REGROW_CYCLES(int* h_GRASS_REGROW_CYCLES);
-
 
 extern const int* get_GRASS_REGROW_CYCLES();
 
@@ -1173,6 +1892,67 @@ extern void runVisualisation();
 
 
 #endif
+
+#if defined(PROFILE)
+#include "nvToolsExt.h"
+
+#define PROFILE_WHITE   0x00eeeeee
+#define PROFILE_GREEN   0x0000ff00
+#define PROFILE_BLUE    0x000000ff
+#define PROFILE_YELLOW  0x00ffff00
+#define PROFILE_MAGENTA 0x00ff00ff
+#define PROFILE_CYAN    0x0000ffff
+#define PROFILE_RED     0x00ff0000
+#define PROFILE_GREY    0x00999999
+#define PROFILE_LILAC   0xC8A2C8
+
+const uint32_t profile_colors[] = {
+  PROFILE_WHITE,
+  PROFILE_GREEN,
+  PROFILE_BLUE,
+  PROFILE_YELLOW,
+  PROFILE_MAGENTA,
+  PROFILE_CYAN,
+  PROFILE_RED,
+  PROFILE_GREY,
+  PROFILE_LILAC
+};
+const int num_profile_colors = sizeof(profile_colors) / sizeof(uint32_t);
+
+// Externed value containing colour information.
+extern unsigned int g_profile_colour_id;
+
+#define PROFILE_PUSH_RANGE(name) { \
+    unsigned int color_id = g_profile_colour_id % num_profile_colors;\
+    nvtxEventAttributes_t eventAttrib = {0}; \
+    eventAttrib.version = NVTX_VERSION; \
+    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
+    eventAttrib.colorType = NVTX_COLOR_ARGB; \
+    eventAttrib.color = profile_colors[color_id]; \
+    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
+    eventAttrib.message.ascii = name; \
+    nvtxRangePushEx(&eventAttrib); \
+    g_profile_colour_id++; \
+}
+#define PROFILE_POP_RANGE() nvtxRangePop();
+
+// Class for simple fire-and-forget profile ranges (ie. functions with multiple return conditions.)
+class ProfileScopedRange {
+public:
+    ProfileScopedRange(const char * name){
+      PROFILE_PUSH_RANGE(name);
+    }
+    ~ProfileScopedRange(){
+      PROFILE_POP_RANGE();
+    }
+};
+#define PROFILE_SCOPED_RANGE(name) ProfileScopedRange uniq_name_using_macros(name);
+#else
+#define PROFILE_PUSH_RANGE(name)
+#define PROFILE_POP_RANGE()
+#define PROFILE_SCOPED_RANGE(name)
+#endif
+
 
 #endif //__HEADER
 
