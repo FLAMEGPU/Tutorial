@@ -7,6 +7,6 @@ FLAME GPU (Flexible Large-scale Agent Modelling Environment for Graphics Process
 The FLAME GPU documentation and user guide can be found at [http://docs.flamegpu.com](http://docs.flamegpu.com), with source hosted on GitHub at [FLAMEGPU/docs](https://github.com/FLAMEGPU/docs).
 
 
-##Problem reports
+## Problem reports
 
 To report a bug in this documentation or in the software or propose an improvement, please use the FLAMEGPU GitHub issue tracker.
