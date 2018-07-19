@@ -1,8 +1,5 @@
 # Set size of output image
-set terminal png size 1200,800 enhanced font 'sans,30'
-#set key font ",30"
-set xtics font "sans,20" 
-set ytics font "sans,20" 
+set terminal png size 1200,800
 
 # Set name of output file.  The quotes are required
 set output "PreyPredator.png"
